@@ -29,7 +29,7 @@ builder.Services.AddHttpClient<IBreweryApiClient, BreweryApiClient>(client =>
 });
 
 // Register the Brewery service.
-builder.Services.AddSingleton<IBreweryService, BreweryService>();
+builder.Services.AddScoped<IBreweryService, BreweryService>();
 
 // Register the exception filter
 builder.Services.AddScoped<GlobalExceptionFilter>();

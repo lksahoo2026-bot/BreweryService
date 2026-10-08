@@ -1,8 +1,8 @@
 ﻿using BreweryApi.Clients;
 using BreweryApi.Models;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace BreweryApi.Services
 {
@@ -23,7 +23,8 @@ namespace BreweryApi.Services
         private readonly IConfiguration _configuration;
 
         // Creates a semaphore that allows only one request at a time.
-        private readonly SemaphoreSlim _cacheLock = new SemaphoreSlim(1, 1);
+        //SemaphoreSlim is static so that concurrent requests share the same lock when the cache is being populated.
+        private static readonly SemaphoreSlim _cacheLock = new SemaphoreSlim(1, 1);
 
         public BreweryService(
             IBreweryApiClient apiClient,
