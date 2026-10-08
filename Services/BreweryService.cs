@@ -2,13 +2,15 @@
 using BreweryApi.Models;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 
 namespace BreweryApi.Services
 {
     public class BreweryService : IBreweryService
     {
-        // Key used to store and retrieve brewery data from the memory cache.
+        // Base key used for brewery cache entries.
         private const string CacheKey = "breweries";
+
         // In-memory cache used to store brewery data.
         private readonly IMemoryCache _cache;
 
@@ -16,165 +18,183 @@ namespace BreweryApi.Services
         private readonly IBreweryApiClient _apiClient;
 
         // Logger used to log service-level information.
-        private readonly ILogger<BreweryService> _logger;
+        private readonly ILogger<BreweryService> _logger;     
 
-        // creates a semaphore that allows only one request at a time
-        private readonly SemaphoreSlim _cacheLock =  new SemaphoreSlim(1, 1);
+        private readonly IConfiguration _configuration;
 
-        public BreweryService(IBreweryApiClient apiClient,IMemoryCache cache,ILogger<BreweryService> logger)
+        // Creates a semaphore that allows only one request at a time.
+        private readonly SemaphoreSlim _cacheLock = new SemaphoreSlim(1, 1);
+
+        public BreweryService(
+            IBreweryApiClient apiClient,
+            IMemoryCache cache,
+            ILogger<BreweryService> logger,
+            IConfiguration configuration)
         {
             _apiClient = apiClient;
             _cache = cache;
             _logger = logger;
+            _configuration = configuration;
         }
 
-        /// <summary>
-        /// Gets breweries from the cache or from API, applies search (name or city) and sorting (by name or city or distance),
-        /// and maps the data to the response model.        
-        /// </summary>
-        /// <param name="query">The query parameters specifying filter and sort options.</param>
-        /// <returns>A list of breweries matching the specified criteria.</returns>
-        public async Task<List<BreweryResponse>> GetBreweriesAsync(BreweryQuery query)
+        public async Task<List<BreweryResponse>> GetBreweriesAsync(
+            BreweryQuery query)
         {
-            _logger.LogInformation("Brewery service processing started. Search: {Search}, SortBy: {SortBy}", query.Search, query.SortBy);
+            _logger.LogInformation(
+                "Brewery service processing started. Search: {Search}, SortBy: {SortBy}, Page: {Page}, PageSize: {PageSize}",
+                query.Search, query.SortBy,query.Page,query.PageSize);
 
-            // Get brewery data from the in-memory cache.
-            // If data is not available, it will be fetched from the external API.
-            List<OpenBrewery> breweries = await GetFromCacheAsync();
+            // Use page 1 when the user does not provide a page number.
+            int page = query.Page;
 
-            // Log the number of breweries retrieved.
-            _logger.LogInformation("Retrieved {Count} breweries from cache or external API.",
+            // Use the page size provided by the user.
+            // If not provided, use the value from configuration.
+            int pageSize = query.PageSize ?? int.Parse(_configuration["DefaultPageSize"]!);
+
+
+            // Create a separate cache key for each page and page size.
+            string cacheKey = $"{CacheKey}_{page}_{pageSize}";
+
+            // Get brewery data from cache or external API.
+            List<OpenBrewery> breweries =
+                await GetFromCacheAsync(cacheKey, page, pageSize);
+
+            _logger.LogInformation(
+                "Retrieved {Count} breweries from cache or external API.",
                 breweries.Count);
 
             // Search breweries by name or city.
-            // StringComparison.OrdinalIgnoreCase makes the search case-insensitive.
             if (!string.IsNullOrWhiteSpace(query.Search))
             {
                 breweries = breweries.Where(x =>
-                    x.Name.Contains(query.Search, StringComparison.OrdinalIgnoreCase) ||
-                    x.City.Contains(query.Search, StringComparison.OrdinalIgnoreCase)
+                    x.Name.Contains(
+                        query.Search,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    x.City.Contains(
+                        query.Search,
+                        StringComparison.OrdinalIgnoreCase)
                 ).ToList();
             }
 
-            // sort the breweries by name by default.
-            if (string.IsNullOrWhiteSpace(query.SortBy) || query.SortBy.Equals("name", StringComparison.OrdinalIgnoreCase))
+            // Sort breweries by name by default.
+            if (string.IsNullOrWhiteSpace(query.SortBy) ||
+                query.SortBy.Equals(
+                    "name",
+                    StringComparison.OrdinalIgnoreCase))
             {
                 breweries = breweries.OrderBy(x => x.Name).ToList();
             }
             // Sort breweries by city.
-            else if (query.SortBy.Equals("city", StringComparison.OrdinalIgnoreCase))
+            else if (query.SortBy.Equals(
+                "city",
+                StringComparison.OrdinalIgnoreCase))
             {
                 breweries = breweries.OrderBy(x => x.City).ToList();
             }
             // Sort breweries by distance.
-            else if (query.SortBy.Equals("distance", StringComparison.OrdinalIgnoreCase))
-            {          
-                // Calculate the distance for each brewery and sort from nearest to farthest.
-                breweries = breweries.OrderBy(x => CalculateDistance(x, query)).ToList();
+            else if (query.SortBy.Equals(
+                "distance",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                breweries = breweries
+                    .OrderBy(x => CalculateDistance(x, query))
+                    .ToList();
             }
 
             // Create a list for the API response.
             List<BreweryResponse> result = new List<BreweryResponse>();
 
-            // Map the required fields from OpenBrewery to BreweryResponse.
-            // Only Name, City and Phone are returned to the client.
+            // Map the required fields.
             foreach (OpenBrewery brewery in breweries)
             {
                 BreweryResponse response = new BreweryResponse();
+
                 response.Name = brewery.Name ?? string.Empty;
                 response.City = brewery.City ?? string.Empty;
                 response.Phone = brewery.Phone ?? string.Empty;
+
                 result.Add(response);
             }
 
-            // Log that mapping has completed.
-            _logger.LogInformation("Brewery response mapping completed. Count: {Count}",result.Count);
+            _logger.LogInformation(
+                "Brewery response mapping completed. Count: {Count}",
+                result.Count);
 
-            // Return the list of breweryresponse to the controller.
             return result;
         }
-
-        /// <summary>
-        /// Gets brewery data from the in-memory cache.
-        /// If the data is not available in the cache, it retrieves the data
-        /// from the external API data source and stores it in the cache for 10 minutes.
-        /// </summary>
-        /// <returns>Return the brewery data.</returns>
-        private async Task<List<OpenBrewery>> GetFromCacheAsync()
+        private async Task<List<OpenBrewery>> GetFromCacheAsync(string cacheKey,int page,int pageSize)
         {
-            // First cache check - avoids acquiring the lock when
-            // the data is already available.            
-            if (_cache.TryGetValue<List<OpenBrewery>>(CacheKey, out var breweries) && breweries != null)
+            // First cache check.
+            if (_cache.TryGetValue<List<OpenBrewery>>(cacheKey,out var breweries) && breweries != null)
             {
-                _logger.LogInformation("Brewery data found in cache.");
+                _logger.LogInformation(
+                    "Brewery data found in cache. Page: {Page}, PageSize: {PageSize}",
+                    page,
+                    pageSize);
+
                 return breweries;
             }
 
-            // Cache miss. Wait until the current cache refresh is completed.
+            // Cache miss. Wait for the current cache refresh.
             await _cacheLock.WaitAsync();
 
             try
             {
-                // Double-check the cache after acquiring the lock.
-                //
-                // Another request may have already populated the cache
-                // while this request was waiting for the lock.
-                if (_cache.TryGetValue<List<OpenBrewery>>(CacheKey, out breweries) && breweries != null)
+                // Check cache again after acquiring the lock.
+                if (_cache.TryGetValue<List<OpenBrewery>>(cacheKey,out breweries) && breweries != null)
                 {
                     _logger.LogInformation(
-                        "Brewery data was populated by another request while waiting for cache lock.");
+                        "Brewery data was populated by another request.");
 
                     return breweries;
                 }
 
                 _logger.LogInformation(
-                    "Brewery data not found in cache. Calling external API.");
+                    "Brewery data not found in cache. Calling external API. Page: {Page}, PageSize: {PageSize}",
+                    page,
+                    pageSize);
 
-                // Only one request will reach this point.
-                //breweries = await _apiClient.GetBreweriesAsync();
-                breweries = await _apiClient.GetBreweriesAsync() ?? new List<OpenBrewery>();
+                // Get the requested page from the external API.
+                breweries = await _apiClient.GetBreweriesAsync(page, pageSize) ?? new List<OpenBrewery>();
 
-                // Store brewery data in cache for 10 minutes.
-                _cache.Set(CacheKey,breweries,TimeSpan.FromMinutes(10));
+                // Store the page in cache for 10 minutes.
+                _cache.Set(cacheKey,breweries,TimeSpan.FromMinutes(10));
 
-                _logger.LogInformation(
-                    "Brewery data stored in cache for 10 minutes.");
+                _logger.LogInformation("Brewery data stored in cache for 10 minutes.");
 
                 return breweries;
             }
             finally
             {
-                // Always release the semaphore, even if the external API
-                // call throws an exception.
+                // Always release the semaphore.
                 _cacheLock.Release();
             }
         }
-        /// <summary>
-        /// Calculates a simple distance value between the brewery
-        /// location and the location provided in the query.
-        /// This value is used only for sorting breweries by distance.
-        /// </summary>
-        /// <param name="brewery">contains the brewery's latitude and longitude.</param>
-        /// <param name="query">contains the user's latitude and longitude.</param>
-        /// <returns>calculated distance value.</returns>
-        private static double CalculateDistance(OpenBrewery brewery, BreweryQuery query)
+
+        // Calculates the approximate distance between the brewery location
+        // and the latitude/longitude provided by the user.
+        private static double CalculateDistance(
+            OpenBrewery brewery,
+            BreweryQuery query)
         {
-            // Check whether all required latitude and longitude values are available.
-            if (brewery.Latitude == null || brewery.Longitude == null ||
-                query.Latitude == null || query.Longitude == null)
+            if (brewery.Latitude == null || 
+                brewery.Longitude == null ||
+                query.Latitude == null ||
+                query.Longitude == null)
             {
                 return double.MaxValue;
             }
-            // Calculate the difference between the brewery latitude and user latitude.
-            double latDifference = brewery.Latitude.Value - query.Latitude.Value;
 
-            // Calculate the difference between the brewery longitude and user longitude.
-            double lonDifference = brewery.Longitude.Value - query.Longitude.Value;
+            double latDifference =
+                brewery.Latitude.Value - query.Latitude.Value;
 
-            //Calculate and return a distance value.
+            double lonDifference =
+                brewery.Longitude.Value - query.Longitude.Value;
+
             var result = Math.Sqrt(
                 (latDifference * latDifference) +
                 (lonDifference * lonDifference));
+
             return result;
         }
     }

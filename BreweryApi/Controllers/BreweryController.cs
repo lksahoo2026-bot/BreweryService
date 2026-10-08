@@ -25,9 +25,21 @@ namespace BreweryApi.App.Controllers
         [HttpGet]
         public async Task<IActionResult> GetBreweries([FromQuery] BreweryQuery query)
         {
-            _logger.LogInformation("Get breweries request received. Search: {Search}, SortBy: {SortBy}",
-                query.Search,
-                query.SortBy);
+            _logger.LogInformation(
+            "Get breweries request received. Search: {Search}, SortBy: {SortBy}, Page: {Page}, PageSize: {PageSize}",
+            query.Search,query.SortBy,query.Page,query.PageSize);
+
+            // Validate page number.
+            if (query.Page < 1)
+            {
+                return BadRequest("Page must be greater than zero.");
+            }
+
+            // Validate page size when it is provided.
+            if (query.PageSize.HasValue && query.PageSize.Value < 1)
+            {
+                return BadRequest("PageSize must be greater than zero.");
+            }
 
             // Validate sortBy only when it is provided
             if (!string.IsNullOrWhiteSpace(query.SortBy))

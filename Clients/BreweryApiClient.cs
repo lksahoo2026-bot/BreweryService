@@ -22,33 +22,37 @@ namespace BreweryApi.Clients
             _httpClient = httpClient;
             _logger = logger;
         }
-        public async Task<List<OpenBrewery>> GetBreweriesAsync()
-        {            
-            _logger.LogInformation("Calling Open Brewery API.");
+        public async Task<List<OpenBrewery>> GetBreweriesAsync(
+        int page,
+        int pageSize)
+        {
+            _logger.LogInformation(
+                "Calling Open Brewery API. Page: {Page}, PageSize: {PageSize}",page, pageSize);
 
-            // Call the external Brewery API.
-            //v1/breweries
+            // Call the external Brewery API with pagination.
             HttpResponseMessage response =
-                await _httpClient.GetAsync("v1/breweries?per_page=100");
+                await _httpClient.GetAsync(
+                    $"v1/breweries?page={page}&per_page={pageSize}");
 
             // Check whether the API call was successful.
             response.EnsureSuccessStatusCode();
 
             // Log the response status code.
-            _logger.LogInformation("Open Brewery API returned status code: {StatusCode}",
+            _logger.LogInformation(
+                "Open Brewery API returned status code: {StatusCode}",
                 response.StatusCode);
 
             // Read the API response as JSON.
             string json = await response.Content.ReadAsStringAsync();
 
-            // Convert the JSON response received from the external API
-            // into a list of OpenBrewery objects.
-            List<OpenBrewery>? breweries = JsonSerializer.Deserialize<List<OpenBrewery>>(json,
-                new JsonSerializerOptions
-                {
-                    // Allows JSON and property names to match without considering uppercase or lowercase differences.
-                    PropertyNameCaseInsensitive = true
-                });
+            // Convert JSON into OpenBrewery objects.
+            List<OpenBrewery>? breweries =
+                JsonSerializer.Deserialize<List<OpenBrewery>>(
+                    json,
+                    new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
 
             // Log the number of breweries received.
             _logger.LogInformation(

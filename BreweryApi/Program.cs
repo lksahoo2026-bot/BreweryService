@@ -14,7 +14,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddMemoryCache();
 
 //Read Brewery API Base Url from appsettings file
-var breweryApiUrl = builder.Configuration["BreweryApiUrl"];
+var breweryApiUrl = builder.Configuration["BreweryApi:BreweryApiUrl"];
 
 if (string.IsNullOrWhiteSpace(breweryApiUrl))
 {

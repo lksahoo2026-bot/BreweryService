@@ -24,5 +24,11 @@ namespace BreweryApi.Models
 
         // Longitude of the user's location, used for distance sorting.
         public double? Longitude { get; set; }
+
+        // Page number. If the user does not provide it, page 1 is used.
+        public int Page { get; set; } = 1;
+
+        // Page size. If the user does not provide it, the configured default is used.
+        public int? PageSize { get; set; }
     }
 }

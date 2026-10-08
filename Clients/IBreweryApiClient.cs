@@ -9,6 +9,6 @@ namespace BreweryApi.Clients
 {
     public interface IBreweryApiClient
     {
-        Task<List<OpenBrewery>> GetBreweriesAsync();
+        Task<List<OpenBrewery>> GetBreweriesAsync(int page, int pageSize);
     }
 }
