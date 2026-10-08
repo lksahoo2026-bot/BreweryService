@@ -1,11 +1,10 @@
-﻿using BreweryApi.App.Fliters;
+﻿using BreweryApi.App.Filters;
 using BreweryApi.Models;
 using BreweryApi.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BreweryApi.App.Controllers
 {
-
     [ApiController]
     [Route("api/v1/brewery")]
     [ServiceFilter(typeof(GlobalExceptionFilter))]
@@ -30,7 +29,23 @@ namespace BreweryApi.App.Controllers
                 query.Search,
                 query.SortBy);
 
-            if (query.SortBy == "distance" && (query.Latitude == null || query.Longitude == null))
+            // Validate sortBy only when it is provided
+            if (!string.IsNullOrWhiteSpace(query.SortBy))
+            {
+                // Define the valid sorting values
+                var validSortValues = new[] { "name", "city", "distance" };
+
+                // Return 400 if an invalid sorting option is provided
+                if (!validSortValues.Contains(query.SortBy, StringComparer.OrdinalIgnoreCase))
+                {
+                    return BadRequest(new
+                    {
+                        message = "Invalid sortBy value. Valid values are: name, city, distance."
+                    });
+                }
+            }
+
+            if (string.Equals(query.SortBy, "distance", StringComparison.OrdinalIgnoreCase) && (query.Latitude == null || query.Longitude == null))
             {
                 return BadRequest("Latitude and Longitude are required when sorting by distance.");
             }

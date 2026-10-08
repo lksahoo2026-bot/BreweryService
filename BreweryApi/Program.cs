@@ -1,4 +1,4 @@
-using BreweryApi.App.Fliters;
+using BreweryApi.App.Filters;
 using BreweryApi.Clients;
 using BreweryApi.Services;
 
@@ -14,19 +14,22 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddMemoryCache();
 
 //Read Brewery API Base Url from appsettings file
-var breweryApiUrl =
-    builder.Configuration["BreweryApi:BaseUrl"];
+var breweryApiUrl = builder.Configuration["BreweryApiUrl"];
+
+if (string.IsNullOrWhiteSpace(breweryApiUrl))
+{
+    throw new InvalidOperationException("BreweryApiUrl configuration is missing or empty.");
+}
 
 // Register the external Brewery API client.
 // HttpClient will use this base URL for API calls.
-builder.Services.AddHttpClient<IBreweryApiClient, BreweryApiClient>(
-    client =>
-    {
-        client.BaseAddress = new Uri(breweryApiUrl);
-    });
+builder.Services.AddHttpClient<IBreweryApiClient, BreweryApiClient>(client =>
+{
+    client.BaseAddress = new Uri(breweryApiUrl);
+});
 
 // Register the Brewery service.
-builder.Services.AddScoped<IBreweryService, BreweryService>();
+builder.Services.AddSingleton<IBreweryService, BreweryService>();
 
 // Register the exception filter
 builder.Services.AddScoped<GlobalExceptionFilter>();

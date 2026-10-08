@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc;
 
-namespace BreweryApi.App.Fliters
+namespace BreweryApi.App.Filters
 {
     public class GlobalExceptionFilter : IExceptionFilter
     {

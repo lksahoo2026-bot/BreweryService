@@ -18,6 +18,9 @@ namespace BreweryApi.Services
         // Logger used to log service-level information.
         private readonly ILogger<BreweryService> _logger;
 
+        // creates a semaphore that allows only one request at a time
+        private readonly SemaphoreSlim _cacheLock =  new SemaphoreSlim(1, 1);
+
         public BreweryService(IBreweryApiClient apiClient,IMemoryCache cache,ILogger<BreweryService> logger)
         {
             _apiClient = apiClient;
@@ -53,27 +56,21 @@ namespace BreweryApi.Services
                 ).ToList();
             }
 
-            // Sort breweries by name.
-            if (query.SortBy == "name")
+            // sort the breweries by name by default.
+            if (string.IsNullOrWhiteSpace(query.SortBy) || query.SortBy.Equals("name", StringComparison.OrdinalIgnoreCase))
             {
                 breweries = breweries.OrderBy(x => x.Name).ToList();
             }
             // Sort breweries by city.
-            else if (query.SortBy == "city")
+            else if (query.SortBy.Equals("city", StringComparison.OrdinalIgnoreCase))
             {
                 breweries = breweries.OrderBy(x => x.City).ToList();
             }
             // Sort breweries by distance.
-            // Calculate the distance for each brewery and sort from nearest to farthest.
-            else if (query.SortBy == "distance")
-            {
+            else if (query.SortBy.Equals("distance", StringComparison.OrdinalIgnoreCase))
+            {          
+                // Calculate the distance for each brewery and sort from nearest to farthest.
                 breweries = breweries.OrderBy(x => CalculateDistance(x, query)).ToList();
-            }
-            // If no valid sorting option is provided,
-            // sort the breweries by name by default.
-            else
-            {
-                breweries = breweries.OrderBy(x => x.Name).ToList();
             }
 
             // Create a list for the API response.
@@ -105,27 +102,52 @@ namespace BreweryApi.Services
         /// <returns>Return the brewery data.</returns>
         private async Task<List<OpenBrewery>> GetFromCacheAsync()
         {
-            List<OpenBrewery> breweries;
-
-            // Check whether brewery data is already available in the cache.
-            if (_cache.TryGetValue<List<OpenBrewery>>(CacheKey, out breweries))
+            // First cache check - avoids acquiring the lock when
+            // the data is already available.            
+            if (_cache.TryGetValue<List<OpenBrewery>>(CacheKey, out var breweries) && breweries != null)
             {
                 _logger.LogInformation("Brewery data found in cache.");
-
-                // Return the cached brewery data.
                 return breweries;
             }
 
-            _logger.LogInformation("Brewery data not found in cache. Calling external API.");
+            // Cache miss. Wait until the current cache refresh is completed.
+            await _cacheLock.WaitAsync();
 
-            // Cache data is not available, so get brewery data from the external API data source.
-            breweries = await _apiClient.GetBreweriesAsync();
+            try
+            {
+                // Double-check the cache after acquiring the lock.
+                //
+                // Another request may have already populated the cache
+                // while this request was waiting for the lock.
+                if (_cache.TryGetValue<List<OpenBrewery>>(CacheKey, out breweries) && breweries != null)
+                {
+                    _logger.LogInformation(
+                        "Brewery data was populated by another request while waiting for cache lock.");
 
-            //Store the brewery data in the cache for 10 minutes.
-            _cache.Set(CacheKey,breweries,TimeSpan.FromMinutes(10));
+                    return breweries;
+                }
 
-            _logger.LogInformation("Brewery data stored in cache for 10 minutes.");
-            return breweries;
+                _logger.LogInformation(
+                    "Brewery data not found in cache. Calling external API.");
+
+                // Only one request will reach this point.
+                //breweries = await _apiClient.GetBreweriesAsync();
+                breweries = await _apiClient.GetBreweriesAsync() ?? new List<OpenBrewery>();
+
+                // Store brewery data in cache for 10 minutes.
+                _cache.Set(CacheKey,breweries,TimeSpan.FromMinutes(10));
+
+                _logger.LogInformation(
+                    "Brewery data stored in cache for 10 minutes.");
+
+                return breweries;
+            }
+            finally
+            {
+                // Always release the semaphore, even if the external API
+                // call throws an exception.
+                _cacheLock.Release();
+            }
         }
         /// <summary>
         /// Calculates a simple distance value between the brewery
