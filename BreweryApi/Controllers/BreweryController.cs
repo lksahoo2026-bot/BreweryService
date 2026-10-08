@@ -36,9 +36,9 @@ namespace BreweryApi.App.Controllers
             }
 
             // Validate page size when it is provided.
-            if (query.PageSize.HasValue && query.PageSize.Value < 1)
+            if (query.PageSize.HasValue && (query.PageSize.Value < 1 || query.PageSize.Value > 200))
             {
-                return BadRequest("PageSize must be greater than zero.");
+                return BadRequest("PageSize must be between 1 and 200.");
             }
 
             // Validate sortBy only when it is provided
