@@ -13,6 +13,15 @@ builder.Services.AddSwaggerGen();
 // Add in-memory caching.
 builder.Services.AddMemoryCache();
 
+//Read DefaultPageSize from appsettings file
+var defaultPageSize = builder.Configuration["DefaultPageSize"];
+
+if (string.IsNullOrWhiteSpace(defaultPageSize))
+{
+    throw new InvalidOperationException(
+        "DefaultPageSize configuration is missing or empty.");
+}
+
 //Read Brewery API Base Url from appsettings file
 var breweryApiUrl = builder.Configuration["BreweryApi:BreweryApiUrl"];
 
