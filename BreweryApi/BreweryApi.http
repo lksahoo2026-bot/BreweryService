@@ -1,5 +1,5 @@
 
-@BreweryApi_HostAddress = http://localhost:7204
+@BreweryApi_HostAddress = http://localhost:7205
 
 ###########################################################
 # BREWERY API V1 AND V2
