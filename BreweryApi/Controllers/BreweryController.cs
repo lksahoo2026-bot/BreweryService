@@ -1,11 +1,12 @@
-﻿using BreweryApi.App.Filters;
+﻿using Asp.Versioning;
+using BreweryApi.App.Filters;
 using BreweryApi.Models;
 using BreweryApi.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BreweryApi.App.Controllers
-{
-    [ApiController]
+{    
+    [ApiController]    
     [Route("api/v1/brewery")]
     [ServiceFilter(typeof(GlobalExceptionFilter))]
     public class BreweryController : ControllerBase
@@ -69,6 +70,46 @@ namespace BreweryApi.App.Controllers
 
             // Return the brewery data with HTTP 200 OK.
             return Ok(breweries);
+        }
+
+        // GET: api/v1/brewery/autocomplete?term=san
+        [HttpGet("autocomplete")]
+        public async Task<IActionResult> GetAutocomplete([FromQuery] string term)
+        {
+            // Validate the search term.
+            if (string.IsNullOrWhiteSpace(term))
+            {
+                return BadRequest("Search term is required.");
+            }
+
+            _logger.LogInformation(
+                "Autocomplete requested for term: {Term}", term);
+
+            // Reuse the existing search functionality.
+            var query = new BreweryQuery
+            {
+                Search = term.Trim()
+            };
+
+            var breweries = await _breweryService.GetBreweriesAsync(query);
+
+            // Return unique brewery names and cities as suggestions.
+            var suggestions = breweries
+                .SelectMany(b => new[] { b.Name, b.City })
+                .Where(value =>
+                    !string.IsNullOrWhiteSpace(value) &&
+                    value.Contains(term.Trim(),
+                        StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(value => value)
+                .Take(10)
+                .ToList();
+
+            _logger.LogInformation(
+                "Autocomplete returned {Count} suggestions.",
+                suggestions.Count);
+
+            return Ok(suggestions);
         }
     }
 }

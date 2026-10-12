@@ -20,11 +20,12 @@
       }
     },
     "https": {
+      "swagger/v1/swagger.json": null,
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
       "launchUrl": "swagger",
-      "applicationUrl": "https://localhost:7204;http://localhost:5059",
+      "applicationUrl": "https://localhost:7205;http://localhost:5059",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }

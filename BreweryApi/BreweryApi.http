@@ -1,6 +1,204 @@
-@BreweryApi_HostAddress = http://localhost:5059
 
+@BreweryApi_HostAddress = http://localhost:7204
+
+###########################################################
+# BREWERY API V1 AND V2
+###########################################################
+
+### 1. Get all breweries - V1
+# Expected: 200 OK
+# Response: JSON array of breweries
 GET {{BreweryApi_HostAddress}}/api/v1/brewery
 Accept: application/json
 
 ###
+
+### 2. Get all breweries - V2
+# Expected: 200 OK, if V2 is implemented
+GET {{BreweryApi_HostAddress}}/api/v2/brewery
+Accept: application/json
+
+###
+
+###########################################################
+# PAGINATION
+###########################################################
+
+### 3. Get first page with 10 breweries - V1
+# Expected: 200 OK
+GET {{BreweryApi_HostAddress}}/api/v1/brewery?page=1&pageSize=10
+Accept: application/json
+
+###
+
+### 4. Get second page with 10 breweries - V1
+# Expected: 200 OK
+GET {{BreweryApi_HostAddress}}/api/v1/brewery?page=2&pageSize=10
+Accept: application/json
+
+###
+
+### 5. Get first page with 5 breweries - V1
+# Expected: 200 OK
+GET {{BreweryApi_HostAddress}}/api/v1/brewery?page=1&pageSize=5
+Accept: application/json
+
+###
+
+###########################################################
+# SEARCH
+###########################################################
+
+### 6. Search breweries by name or city - Boston
+# Expected: 200 OK
+GET {{BreweryApi_HostAddress}}/api/v1/brewery?search=Boston
+Accept: application/json
+
+###
+
+### 7. Search breweries in New York
+# Expected: 200 OK
+GET {{BreweryApi_HostAddress}}/api/v1/brewery?search=New%20York
+Accept: application/json
+
+###
+
+### 8. Search breweries using a single character
+# Expected: 200 OK, if single-character searches are supported
+GET {{BreweryApi_HostAddress}}/api/v1/brewery?search=s
+Accept: application/json
+
+###
+
+###########################################################
+# SORTING
+###########################################################
+
+### 9. Sort breweries by name
+# Expected: 200 OK
+GET {{BreweryApi_HostAddress}}/api/v1/brewery?sortBy=name
+Accept: application/json
+
+###
+
+### 10. Sort breweries by city
+# Expected: 200 OK
+GET {{BreweryApi_HostAddress}}/api/v1/brewery?sortBy=city
+Accept: application/json
+
+###
+
+### 11. Sort breweries by distance
+# Expected: 200 OK, if distance sorting is implemented
+GET {{BreweryApi_HostAddress}}/api/v1/brewery?sortBy=distance
+Accept: application/json
+
+###
+
+###########################################################
+# COMBINED SEARCH, SORTING, AND PAGINATION
+###########################################################
+
+### 12. Search Boston, sort by name, and paginate
+# Expected: 200 OK
+GET {{BreweryApi_HostAddress}}/api/v1/brewery?search=Boston&sortBy=name&page=1&pageSize=5
+Accept: application/json
+
+###
+
+### 13. Search New York and sort by city
+# Expected: 200 OK
+GET {{BreweryApi_HostAddress}}/api/v1/brewery?search=New%20York&sortBy=city&page=1&pageSize=10
+Accept: application/json
+
+###
+
+###########################################################
+# AUTOCOMPLETE
+###########################################################
+
+### 14. Autocomplete with multiple characters
+# Expected: 200 OK, up to 10 suggestions
+GET {{BreweryApi_HostAddress}}/api/v1/brewery/autocomplete?term=san
+Accept: application/json
+
+###
+
+### 15. Autocomplete with a single character
+# Expected: 200 OK, if single-character terms are supported
+GET {{BreweryApi_HostAddress}}/api/v1/brewery/autocomplete?term=s
+Accept: application/json
+
+###
+
+### 16. Autocomplete with no search term
+# Expected: 400 Bad Request, if empty-term validation is implemented
+GET {{BreweryApi_HostAddress}}/api/v1/brewery/autocomplete
+Accept: application/json
+
+###
+
+### 17. Autocomplete with a different term
+GET {{BreweryApi_HostAddress}}/api/v1/brewery/autocomplete?term=Boston
+Accept: application/json
+
+###
+
+###########################################################
+# VALIDATION / ERROR SCENARIOS
+###########################################################
+
+### 18. Invalid sort field
+# Expected: 400 Bad Request, if sort validation is implemented
+GET {{BreweryApi_HostAddress}}/api/v1/brewery?sortBy=invalid
+Accept: application/json
+
+###
+
+### 19. Invalid page number
+# Expected: 400 Bad Request, if page validation is implemented
+GET {{BreweryApi_HostAddress}}/api/v1/brewery?page=0
+Accept: application/json
+
+###
+
+### 20. Invalid page size
+# Expected: 400 Bad Request, if page-size validation is implemented
+GET {{BreweryApi_HostAddress}}/api/v1/brewery?pageSize=0
+Accept: application/json
+
+###
+
+### 21. Page size above the maximum of 200
+# Expected: 400 Bad Request, if maximum page-size validation is implemented
+GET {{BreweryApi_HostAddress}}/api/v1/brewery?pageSize=201
+Accept: application/json
+
+###
+
+### 22. Invalid page and page size
+GET {{BreweryApi_HostAddress}}/api/v1/brewery?page=-1&pageSize=-5
+Accept: application/json
+
+###
+
+###########################################################
+# API V2 - OPTIONAL TESTS
+# Keep these requests only if V2 implements the same routes.
+###########################################################
+
+### 23. Search breweries - V2
+GET {{BreweryApi_HostAddress}}/api/v2/brewery?search=Boston
+Accept: application/json
+
+###
+
+### 24. Sort breweries by name - V2
+GET {{BreweryApi_HostAddress}}/api/v2/brewery?sortBy=name
+Accept: application/json
+
+###
+
+### 25. Paginate breweries - V2
+GET {{BreweryApi_HostAddress}}/api/v2/brewery?page=1&pageSize=10
+Accept: application/json

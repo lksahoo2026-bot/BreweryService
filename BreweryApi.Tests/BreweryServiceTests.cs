@@ -157,6 +157,104 @@ public class BreweryServiceTests
         Assert.Equal("Z Brewery", result[1].Name);
     }
 
+
+    [Fact]
+    public async Task GetBreweriesAsync_SortsByCity()
+    {
+        // Arrange
+        var breweries = new List<OpenBrewery>
+    {
+        new OpenBrewery { Name = "Z Brewery", City = "New York" },
+        new OpenBrewery { Name = "A Brewery", City = "Boston" }
+    };
+
+        _apiClientMock
+            .Setup(x => x.GetBreweriesAsync(1, 100))
+            .ReturnsAsync(breweries);
+
+        var query = new BreweryQuery
+        {
+            Page = 1,
+            PageSize = 100,
+            SortBy = "city"
+        };
+
+        // Act
+        var result = await _service.GetBreweriesAsync(query);
+
+        // Assert
+        Assert.Equal(2, result.Count);
+        Assert.Equal("Boston", result[0].City);
+        Assert.Equal("New York", result[1].City);
+    }
+
+
+    [Fact]
+    public async Task GetBreweriesAsync_SortsByDistance()
+    {
+        // Arrange
+        var breweries = new List<OpenBrewery>
+        {
+        new OpenBrewery { Name = "Far Brewery", Latitude = 40.7128, Longitude = -74.0060 },
+        new OpenBrewery { Name = "Near Brewery", Latitude = 42.3601, Longitude = -71.0589 }
+        };
+
+        _apiClientMock
+            .Setup(x => x.GetBreweriesAsync(1, 100))
+            .ReturnsAsync(breweries);
+
+
+        var query = new BreweryQuery
+        {
+            Page = 1,
+            PageSize = 100,
+            SortBy = "distance",
+            Latitude = 42.3601,
+            Longitude = -71.0589
+        };
+
+        // Act
+        var result = await _service.GetBreweriesAsync(query);
+
+        // Assert
+        Assert.Equal("Near Brewery", result[0].Name);
+        Assert.Equal("Far Brewery", result[1].Name);
+    }
+
+    [Fact]
+    public async Task GetBreweriesAsync_SearchesByCityAndSortsByName()
+    {
+        // Arrange
+        var breweries = new List<OpenBrewery>
+        {
+        new OpenBrewery { Name = "Z Brewery", City = "Boston" },
+        new OpenBrewery { Name = "A Brewery", City = "Boston" },
+        new OpenBrewery { Name = "M Brewery", City = "New York" }
+        };
+
+        _apiClientMock
+            .Setup(x => x.GetBreweriesAsync(1, 100))
+            .ReturnsAsync(breweries);
+
+        var query = new BreweryQuery
+        {
+            Page = 1,
+            PageSize = 100,
+            Search = "Boston",
+            SortBy = "name"
+        };
+
+        // Act
+        var result = await _service.GetBreweriesAsync(query);
+
+        // Assert
+        Assert.Equal(2, result.Count);
+        Assert.Equal("A Brewery", result[0].Name);
+        Assert.Equal("Z Brewery", result[1].Name);
+        Assert.Equal("Boston", result[0].City);
+        Assert.Equal("Boston", result[1].City);
+    }
+
     [Fact]
     public async Task GetBreweriesAsync_ReturnsEmptyList_WhenApiReturnsEmpty()
     {
