@@ -23,93 +23,25 @@ namespace BreweryApi.App.Controllers
             _logger = logger;
         }
 
+
         [HttpGet]
-        public async Task<IActionResult> GetBreweries([FromQuery] BreweryQuery query)
+        public async Task<IActionResult> GetBreweries(
+            [FromQuery] BreweryQuery query)
         {
-            _logger.LogInformation(
-            "Get breweries request received. Search: {Search}, SortBy: {SortBy}, Page: {Page}, PageSize: {PageSize}",
-            query.Search, query.SortBy, query.Page, query.PageSize);
+            var breweries =
+            await _breweryService.GetBreweriesV2Async(query);
 
-            // Validate page number.
-            if (query.Page < 1)
+            var response = breweries.Select(b => new BreweryResponseV2
             {
-                return BadRequest("Page must be greater than zero.");
-            }
+                Name = b.Name,
+                City = b.City,
+                Phone = b.Phone,
+                Country = b.Country
+            }).ToList();
 
-            // Validate page size when it is provided.
-            if (query.PageSize.HasValue && (query.PageSize.Value < 1 || query.PageSize.Value > 200))
-            {
-                return BadRequest("PageSize must be between 1 and 200.");
-            }
-
-            // Validate sortBy only when it is provided
-            if (!string.IsNullOrWhiteSpace(query.SortBy))
-            {
-                // Define the valid sorting values
-                var validSortValues = new[] { "name", "city", "distance" };
-
-                // Return 400 if an invalid sorting option is provided
-                if (!validSortValues.Contains(query.SortBy, StringComparer.OrdinalIgnoreCase))
-                {
-                    return BadRequest(new
-                    {
-                        message = "Invalid sortBy value. Valid values are: name, city, distance."
-                    });
-                }
-            }
-
-            if (string.Equals(query.SortBy, "distance", StringComparison.OrdinalIgnoreCase) && (query.Latitude == null || query.Longitude == null))
-            {
-                return BadRequest("Latitude and Longitude are required when sorting by distance.");
-            }
-
-            // Call the service to get brewery data.
-            var breweries = await _breweryService.GetBreweriesAsync(query);
-
-            _logger.LogInformation("Get breweries request completed. Count: {Count}", breweries.Count);
-
-            // Return the brewery data with HTTP 200 OK.
-            return Ok(breweries);
+            return Ok(response);
         }
 
-        // GET: api/v2/brewery/autocomplete?term=san
-        [HttpGet("autocomplete")]
-        public async Task<IActionResult> GetAutocomplete([FromQuery] string term)
-        {
-            // Validate the search term.
-            if (string.IsNullOrWhiteSpace(term))
-            {
-                return BadRequest("Search term is required.");
-            }
 
-            _logger.LogInformation(
-                "Autocomplete requested for term: {Term}", term);
-
-            // Reuse the existing search functionality.
-            var query = new BreweryQuery
-            {
-                Search = term.Trim()
-            };
-
-            var breweries = await _breweryService.GetBreweriesAsync(query);
-
-            // Return unique brewery names and cities as suggestions.
-            var suggestions = breweries
-                .SelectMany(b => new[] { b.Name, b.City })
-                .Where(value =>
-                    !string.IsNullOrWhiteSpace(value) &&
-                    value.Contains(term.Trim(),
-                        StringComparison.OrdinalIgnoreCase))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(value => value)
-                .Take(10)
-                .ToList();
-
-            _logger.LogInformation(
-                "Autocomplete returned {Count} suggestions.",
-                suggestions.Count);
-
-            return Ok(suggestions);
-        }
     }
 }

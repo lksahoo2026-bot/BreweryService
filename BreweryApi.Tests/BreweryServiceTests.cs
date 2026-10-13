@@ -1,6 +1,7 @@
 ﻿using BreweryApi.Clients;
 using BreweryApi.Models;
 using BreweryApi.Services;
+using BreweryApi.Services.Caching;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -12,7 +13,7 @@ namespace BreweryApi.Tests;
 public class BreweryServiceTests
 {
     private readonly Mock<IBreweryApiClient> _apiClientMock;
-    private readonly IMemoryCache _cache;
+    private readonly IBreweryCache _cache;
     private readonly Mock<ILogger<BreweryService>> _loggerMock;
     private readonly Mock<IConfiguration> _configurationMock;
 
@@ -21,7 +22,7 @@ public class BreweryServiceTests
     public BreweryServiceTests()
     {
         _apiClientMock = new Mock<IBreweryApiClient>();
-        _cache = new MemoryCache(new MemoryCacheOptions());
+        _cache = new BreweryCache(new MemoryCache(new MemoryCacheOptions()));
         _loggerMock = new Mock<ILogger<BreweryService>>();
 
         _configurationMock = new Mock<IConfiguration>();

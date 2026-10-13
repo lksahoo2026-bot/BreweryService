@@ -20,5 +20,8 @@
         // Longitude of the brewery location.
         public double? Longitude { get; set; }
 
+        // Country of the brewery for V2
+        public string? Country { get; set; }
+
     }
 }

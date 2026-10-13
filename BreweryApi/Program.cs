@@ -4,6 +4,7 @@ using BreweryApi.Clients;
 using BreweryApi.Services;
 using Microsoft.OpenApi.Models;
 using Serilog;
+using BreweryApi.Services.Caching;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -104,6 +105,8 @@ builder.Services.AddSwaggerGen(options =>
 });
 // Add in-memory caching.
 builder.Services.AddMemoryCache();
+
+builder.Services.AddSingleton<IBreweryCache, BreweryCache>();
 
 //Read DefaultPageSize from appsettings file
 var defaultPageSize = builder.Configuration["DefaultPageSize"];
