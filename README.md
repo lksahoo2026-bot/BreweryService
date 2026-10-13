@@ -2,8 +2,9 @@
 
 ## Project Overview
 
-BreweryAPI is a .NET 8 Web API that retrieves brewery data from [Open Brewery DB](https://www.openbrewerydb.org/). 
-It provides endpoints to search, sort, calculate distances, cache, and paginate brewery information.
+BreweryAPI is a .NET 8 Web API that retrieves brewery data from [Open Brewery DB](https://www.openbrewerydb.org/).
+
+It provides API versioning, brewery search, autocomplete, sorting, distance calculation, pagination, in-memory caching, centralized exception handling, and structured logging with Serilog.
 
 ## Prerequisites
 
@@ -44,7 +45,7 @@ Ensure the configuration section and property names match the application code.
 
 ### 3. Restore and Build
 
-Run the following commands from the solution directory:
+Run these commands from the solution directory:
 
 ```bash
 dotnet restore
@@ -60,6 +61,17 @@ dotnet run --project BreweryAPI/BreweryAPI.csproj
 Use the URL displayed in the console to access the API. If Swagger is enabled, navigate to `/swagger`.
 
 ## API Usage
+
+### API Versioning
+
+The API exposes versioned endpoints to support future changes while maintaining backward compatibility.
+
+| Version | Endpoint | Description |
+|---|---|---|
+| V1 | `GET /api/v1/brewery` | Retrieves brewery information using the V1 response contract |
+| V2 | `GET /api/v2/brewery` | Retrieves brewery information using the V2 response contract |
+
+V2 includes the `Country` field if the V2 response model and controller mapping have been implemented. The V1 response contract remains unchanged.
 
 ### Get Breweries
 
@@ -81,10 +93,11 @@ GET /api/v1/brewery?search=austin&sortBy=name&page=1&pageSize=100
 
 | Parameter | Description | Example |
 |---|---|---|
-| `search` | Searches brewery names and/or cities, according to the implementation | `search=austin` |
-| `sortBy` | Sorts by a supported field | `sortBy=name` |
+| `search` | Searches supported brewery fields, such as name and city | `search=austin` |
+| `sortBy` | Specifies the supported sorting field | `sortBy=name` |
 | `page` | Specifies the page number | `page=1` |
 | `pageSize` | Specifies the number of results per page | `pageSize=100` |
+| Latitude and longitude | Reference coordinates used for distance sorting, when supported by the query model | Use the exact parameter names defined in `BreweryQuery` |
 
 Supported sorting options:
 
@@ -92,9 +105,15 @@ Supported sorting options:
 - `city`
 - `distance`
 
-The default page size is configured through `BreweryApi:DefaultPageSize` when `pageSize` is omitted.
+The default page size is configured through `BreweryApi:DefaultPageSize` when `pageSize` is omitted. The maximum supported page size is 200.
 
-Example cURL request:
+### Autocomplete
+
+Autocomplete supports suggestions based on a partial search term, where implemented by the autocomplete endpoint.
+
+Use the route and query parameter names defined by the autocomplete controller action. Confirm the exact endpoint in Swagger before using it in client applications.
+
+### Example cURL Request
 
 ```bash
 curl "https://localhost:<port>/api/v1/brewery?search=austin&sortBy=name&page=1&pageSize=100"
@@ -102,43 +121,53 @@ curl "https://localhost:<port>/api/v1/brewery?search=austin&sortBy=name&page=1&p
 
 Replace `<port>` with the HTTPS port displayed when the application starts.
 
-**Note:** Confirm the exact query parameter names in the `BreweryQuery` model and controller. 
-If distance sorting requires latitude and longitude parameters, document those parameters as well.
-
 ## Features
 
 ### Search
 
-Searches brewery information using the supported fields, such as brewery name and city.
+Searches brewery information using supported fields, such as brewery name and city.
+
+### Autocomplete
+
+Provides suggestions from partial input to help users discover matching breweries more easily.
 
 ### Sorting
 
-Supports sorting by brewery name, city, and distance. Unsupported sorting values should return `400 Bad Request`.
+Supports sorting by brewery name, city, and distance. Unsupported sorting values return `400 Bad Request` when handled by the query validation logic.
 
 ### Distance Calculation
 
-Uses the Pythagorean formula to calculate the great-circle distance between geographic coordinates when valid coordinates and a reference location are available.
+Uses the Haversine formula to calculate the great-circle distance between two geographic coordinates.
+
+- Uses Earth's mean radius of approximately 6,371 kilometres.
+- Converts latitude and longitude from degrees to radians before applying the formula.
+- Requires valid brewery coordinates and reference coordinates.
+- Returns a distance in kilometres when valid coordinates are available.
 
 ### Caching
 
-Uses `IMemoryCache` to reduce repeated calls to the external brewery API.
+Uses `IMemoryCache` through the custom `IBreweryCache` interface, implemented by `BreweryCache`, to reduce repeated calls to the external brewery API.
 
-- Cached data is retained for 10 minutes.
-- Cache entries are lost when the application restarts.
-- Concurrent cache misses should be coordinated to avoid duplicate external API calls.
-- Each application instance maintains its own in-memory cache.
+- **In-memory storage:** Cached brewery data is stored in application RAM.
+- **Cache expiration:** Cached data is retained for 10 minutes.
+- **Application restart:** Cache entries are lost when the application or server restarts.
+- **Concurrent requests:** Uses `SemaphoreSlim` to coordinate cache misses and help avoid duplicate external API calls.
+- **Multiple instances:** Each application instance maintains its own independent in-memory cache.
+- **Separation of concerns:** `IBreweryCache` defines the caching operations, while `BreweryCache` implements them using `IMemoryCache`.
+- **Testability:** The cache abstraction allows caching behavior to be mocked in unit tests.
 
 ### Pagination
 
 Supports page-based retrieval using `page` and `pageSize`.
 
 - The default page size is configurable.
-- Page-size validation prevents invalid requests.
+- Page and page-size validation helps prevent invalid requests.
 - Open Brewery DB supports a maximum `per_page` value of 200.
+- The application should validate page-size values before calling the external API.
 
 ## Architecture
 
-The application follows a controller-service-client architecture.
+The application follows a controller-service-client architecture, with a separate caching abstraction.
 
 ```text
 HTTP Client
@@ -149,6 +178,11 @@ BreweryController
     v
 IBreweryService / BreweryService
     |
+    +----> IBreweryCache / BreweryCache
+    |                 |
+    |                 v
+    |             IMemoryCache
+    |
     v
 IBreweryApiClient / BreweryApiClient
     |
@@ -156,19 +190,23 @@ IBreweryApiClient / BreweryApiClient
 Open Brewery DB
 ```
 
-**Controller:** Handles HTTP requests, query parameters, and HTTP responses.
+**Controller:** Handles HTTP requests, query parameters, API version routing, and HTTP responses.
 
-**Service:** Implements search, sorting, distance calculation, pagination, and caching.
+**Service:** Implements brewery search, sorting, distance calculation, pagination, and cache coordination.
 
-**API Client:** Communicates with Open Brewery DB and processes the response.
+**Cache abstraction:** `IBreweryCache` defines the caching operations, and `BreweryCache` implements them using `IMemoryCache`.
 
-**Models:** Represent query parameters and brewery response data.
+**API client:** Communicates with Open Brewery DB and processes the external API response.
 
-**Exception Handling and Logging:** Provide consistent error handling and diagnostic information.
+**Models:** Represent query parameters and API response data, including version-specific response models where implemented.
+
+**Exception handling:** Handles application errors centrally using the configured exception-handling mechanism.
+
+**Logging:** Uses Serilog for structured application logging and diagnostics.
 
 ## Configuration
 
-Application settings are maintained in `appsettings.json` and can be overridden using environment-specific configuration.
+Application settings are maintained in `appsettings.json` and can be overridden using environment-specific configuration or environment variables.
 
 | Setting | Description |
 |---|---|
@@ -184,35 +222,52 @@ BreweryApi__DefaultPageSize=100
 
 Required configuration should be validated during application startup.
 
+## Logging with Serilog
+
+Uses Serilog for structured logging and application diagnostics.
+
+Logging helps track:
+
+- Cache hits and misses.
+- Calls to the external brewery API.
+- Application errors and exceptions.
+- Relevant request-processing information.
+
+Log destinations and minimum logging levels depend on the Serilog configuration in the application.
+
+Generated log files should not be committed to source control. If the application writes logs to a `Logs` directory, add the following entries to `.gitignore`:
+
+```gitignore
+Logs/
+*.log
+```
+
 ## Error Handling
 
 The API validates user input and handles failures from the external brewery service.
 
-| Scenario | Expected Behavior |
+| Scenario | Expected behavior |
 |---|---|
 | Invalid page number or page size | `400 Bad Request` with a validation message |
 | Unsupported sorting field | `400 Bad Request` with a validation message |
-| Missing or invalid configuration | Clear startup validation error |
-| External API returns an unsuccessful response | Log the failure and return an appropriate error response |
+| Missing or invalid configuration | Startup validation error |
+| External API failure | Log the failure and return an appropriate error response |
 | External API timeout or unavailability | Handle the exception and return an appropriate error response |
 | Unexpected application exception | Centralized exception handling returns a safe error response |
 
-Exact status codes and response formats depend on the controller and exception-filter implementation.
+Exact status codes and response formats depend on the controller and exception-handling implementation.
 
 ## Limitations
 
 - The application depends on Open Brewery DB availability and response format.
-- Cached brewery data may be stale for approximately 10 minutes.
+- Cached brewery data may become stale until the 10-minute cache entry expires.
 - In-memory cache data is not persistent and is not shared between application instances.
-- Search is limited to `name` and `city`.
-- Sorting supports only `name`, `city`, and `distance`.
-- Distance calculations require valid coordinates and a supported reference location.
+- Search is limited to the fields implemented by the service, such as name and city.
+- Distance calculations require valid coordinates and reference-location parameters.
 - Open Brewery DB limits `per_page` to 200.
-- Integration tests should isolate the external API to ensure repeatable results.
+- Live external API tests may be affected by network availability or changes in external data.
 
 ## Testing
-
-### Unit Tests
 
 Run all tests from the solution directory:
 
@@ -220,43 +275,27 @@ Run all tests from the solution directory:
 dotnet test
 ```
 
-To run a specific unit-test project:
+To run a specific test project:
 
 ```bash
-dotnet test <path-to-unit-test-project.csproj>
+dotnet test <path-to-test-project.csproj>
 ```
 
-Unit tests should cover:
+Recommended unit-test coverage includes:
 
-- Search functionality
-- Sorting by name, city, and distance
-- Distance calculations
-- Pagination and default page size
-- Cache hits and cache misses
-- Invalid query parameters
-- External API errors and exceptions
+- Search by name and city.
+- Sorting by name, city, and distance.
+- Haversine distance calculations.
+- Pagination and default page size.
+- Cache hits, cache misses, and concurrent requests.
+- Invalid query parameters.
+- V1 and V2 response contracts.
+- Autocomplete behavior, if implemented.
+- External API failures and exception handling.
 
-Use the test framework and mocking libraries configured in the solution, such as xUnit and Moq if applicable.
+If an integration/API test project exists, run it separately and verify endpoint routing, HTTP status codes, response structures, and error handling.
 
-### Integration/API Tests
-
-If an integration-test project exists, execute it using:
-
-```bash
-dotnet test <path-to-integration-test-project.csproj>
-```
-
-Integration tests should verify:
-
-- API endpoint routing
-- HTTP status codes
-- Query parameter validation
-- Response structure
-- Error handling
-
-Use a test server or mock the external API where possible rather than depending on a live third-party service.
-
-If an integration-test project has not been created, add one before reporting integration tests as implemented.
+For repeatable integration tests, use a test server or mock the external API where possible rather than depending on live third-party data.
 
 ## Troubleshooting
 
@@ -266,7 +305,7 @@ If an integration-test project has not been created, add one before reporting in
 
 **No results returned:** Try a broader search term and confirm which fields the service searches.
 
-**Unexpected cached data:** Wait for the cache to expire or restart the application in a local development environment.
+**Unexpected cached data:** Wait for the cache entry to expire or restart the application in a local development environment.
 
 **Build or test failure:** Run `dotnet restore`, `dotnet build`, and `dotnet test`, then review the reported errors.
 
