@@ -1,5 +1,5 @@
 
-@BreweryApi_HostAddress = http://localhost:7205
+@BreweryApi_HostAddress = https://localhost:7205
 
 ###########################################################
 # BREWERY API V1 AND V2
@@ -49,16 +49,16 @@ Accept: application/json
 # SEARCH
 ###########################################################
 
-### 6. Search breweries by name or city - Boston
+### 6. Search breweries by name or city - Austin
 # Expected: 200 OK
-GET {{BreweryApi_HostAddress}}/api/v1/brewery?search=Boston
+GET {{BreweryApi_HostAddress}}/api/v1/brewery?search=Austin
 Accept: application/json
 
 ###
 
-### 7. Search breweries in New York
+### 7. Search breweries in San Diego
 # Expected: 200 OK
-GET {{BreweryApi_HostAddress}}/api/v1/brewery?search=New%20York
+GET {{BreweryApi_HostAddress}}/api/v1/brewery?search=San%20Diego
 Accept: application/json
 
 ###
@@ -101,14 +101,14 @@ Accept: application/json
 
 ### 12. Search Boston, sort by name, and paginate
 # Expected: 200 OK
-GET {{BreweryApi_HostAddress}}/api/v1/brewery?search=Boston&sortBy=name&page=1&pageSize=5
+GET {{BreweryApi_HostAddress}}/api/v1/brewery?search=Austin&sortBy=name&page=1&pageSize=5
 Accept: application/json
 
 ###
 
 ### 13. Search New York and sort by city
 # Expected: 200 OK
-GET {{BreweryApi_HostAddress}}/api/v1/brewery?search=New%20York&sortBy=city&page=1&pageSize=10
+GET {{BreweryApi_HostAddress}}/api/v1/brewery?search=Austin&sortBy=city&page=1&pageSize=10
 Accept: application/json
 
 ###
@@ -139,7 +139,7 @@ Accept: application/json
 ###
 
 ### 17. Autocomplete with a different term
-GET {{BreweryApi_HostAddress}}/api/v1/brewery/autocomplete?term=Boston
+GET {{BreweryApi_HostAddress}}/api/v1/brewery/autocomplete?term=Austin
 Accept: application/json
 
 ###
@@ -188,7 +188,7 @@ Accept: application/json
 ###########################################################
 
 ### 23. Search breweries - V2
-GET {{BreweryApi_HostAddress}}/api/v2/brewery?search=Boston
+GET {{BreweryApi_HostAddress}}/api/v2/brewery?search=Austin
 Accept: application/json
 
 ###
